@@ -76,17 +76,17 @@ pipeline {
     post {
 
         success {
-            echo "✅ PIPELINE SUCCESS: Build, Test, Deploy completed."
+            echo " PIPELINE SUCCESS: Build, Test, Deploy completed."
             bat "echo SUCCESS > %ARTIFACT_DIR%\\status.txt"
         }
 
         failure {
-            echo "❌ PIPELINE FAILURE: One or more stages failed."
+            echo " PIPELINE FAILURE: One or more stages failed."
             bat "echo FAILURE > %ARTIFACT_DIR%\\status.txt"
         }
 
         always {
-            echo "📦 Archiving pipeline results..."
+            echo " Archiving pipeline results..."
             archiveArtifacts artifacts: "${ARTIFACT_DIR}/**", fingerprint: true
 
             echo "Publishing test results if available..."
