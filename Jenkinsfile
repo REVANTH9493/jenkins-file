@@ -21,16 +21,14 @@ pipeline {
         stage('Build') {
             steps {
                 echo "===== BUILD STAGE ====="
-
                 script {
-                    if (fileExists('gradlew') || fileExists('gradlew.bat')) {
+                    if (fileExists('gradlew')) {
                         echo "Gradle wrapper detected. Running Gradle build..."
-                        // Windows + Linux compatible
-                        bat 'gradlew.bat clean build'  // for Windows Jenkins
-                        // sh './gradlew clean build'   // for Linux Jenkins
+                        sh 'chmod +x ./gradlew'
+                        sh './gradlew clean build'
                     } else {
                         echo "No gradle wrapper found. Running sample build step..."
-                        bat 'echo Build completed > build_result.txt'
+                        sh 'echo Build completed > build_result.txt'
                     }
                 }
             }
@@ -39,23 +37,18 @@ pipeline {
         stage('Test') {
             steps {
                 echo "===== TEST STAGE ====="
+                sh """
+                    mkdir -p ${ARTIFACT_DIR}
 
-                script {
-                    // Create output folder
-                    bat "if not exist %ARTIFACT_DIR% mkdir %ARTIFACT_DIR%"
+                    echo "===== Git Info ====="
+                    git rev-parse HEAD | tee ${ARTIFACT_DIR}/commit.txt
 
-                    // Git commit info
-                    bat "git rev-parse HEAD > %ARTIFACT_DIR%\\commit.txt"
-
-                    // If Gradle test report exists, keep it
-                    bat """
-                    if exist build\\reports\\tests\\test (
-                        xcopy /E /I /Y build\\reports\\tests\\test %ARTIFACT_DIR%\\test-report
-                    ) else (
-                        echo No test report found > %ARTIFACT_DIR%\\test-report-missing.txt
-                    )
-                    """
-                }
+                    if [ -d build/reports/tests/test ]; then
+                        cp -r build/reports/tests/test ${ARTIFACT_DIR}/test-report
+                    else
+                        echo "No test report found" > ${ARTIFACT_DIR}/test-report-missing.txt
+                    fi
+                """
             }
         }
 
@@ -63,30 +56,26 @@ pipeline {
             steps {
                 echo "===== DEPLOY STAGE ====="
                 echo "This stage simulates deployment."
-
-                script {
-                    bat """
-                    echo Deployment simulated successfully > %ARTIFACT_DIR%\\deploy.txt
-                    """
-                }
+                sh """
+                    echo "Deployment simulated successfully" > ${ARTIFACT_DIR}/deploy.txt
+                """
             }
         }
     }
 
     post {
-
         success {
-            echo " PIPELINE SUCCESS: Build, Test, Deploy completed."
-            bat "echo SUCCESS > %ARTIFACT_DIR%\\status.txt"
+            echo "PIPELINE SUCCESS: Build, Test, Deploy completed."
+            sh "echo SUCCESS > ${ARTIFACT_DIR}/status.txt"
         }
 
         failure {
-            echo " PIPELINE FAILURE: One or more stages failed."
-            bat "echo FAILURE > %ARTIFACT_DIR%\\status.txt"
+            echo "PIPELINE FAILURE: One or more stages failed."
+            sh "mkdir -p ${ARTIFACT_DIR} && echo FAILURE > ${ARTIFACT_DIR}/status.txt"
         }
 
         always {
-            echo " Archiving pipeline results..."
+            echo "Archiving pipeline results..."
             archiveArtifacts artifacts: "${ARTIFACT_DIR}/**", fingerprint: true
 
             echo "Publishing test results if available..."
