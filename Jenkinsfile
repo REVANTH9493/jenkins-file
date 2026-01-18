@@ -3,6 +3,7 @@ pipeline {
 
     options {
         timestamps()
+        skipDefaultCheckout(true)
     }
 
     environment {
@@ -21,42 +22,23 @@ pipeline {
         stage('Build') {
             steps {
                 echo "===== BUILD STAGE ====="
-                script {
-                    if (fileExists('gradlew')) {
-                        echo "Gradle wrapper detected. Running Gradle build..."
-                        sh 'chmod +x ./gradlew'
-                        sh './gradlew clean build'
-                    } else {
-                        echo "No gradle wrapper found. Running sample build step..."
-                        sh 'echo Build completed > build_result.txt'
-                    }
-                }
+                sh 'chmod +x ./gradlew || true'
+                sh './gradlew clean build -x test'
             }
         }
 
-        stage('Test') {
+        stage('Unit Test') {
             steps {
-                echo "===== TEST STAGE ====="
-                sh """
-                    mkdir -p ${ARTIFACT_DIR}
-
-                    echo "===== Git Info ====="
-                    git rev-parse HEAD | tee ${ARTIFACT_DIR}/commit.txt
-
-                    if [ -d build/reports/tests/test ]; then
-                        cp -r build/reports/tests/test ${ARTIFACT_DIR}/test-report
-                    else
-                        echo "No test report found" > ${ARTIFACT_DIR}/test-report-missing.txt
-                    fi
-                """
+                echo "===== UNIT TEST STAGE ====="
+                sh './gradlew test'
             }
         }
 
         stage('Deploy') {
             steps {
                 echo "===== DEPLOY STAGE ====="
-                echo "This stage simulates deployment."
                 sh """
+                    mkdir -p ${ARTIFACT_DIR}
                     echo "Deployment simulated successfully" > ${ARTIFACT_DIR}/deploy.txt
                 """
             }
@@ -64,22 +46,25 @@ pipeline {
     }
 
     post {
+        always {
+            echo "Archiving pipeline results..."
+            sh "mkdir -p ${ARTIFACT_DIR} || true"
+            sh "git rev-parse HEAD > ${ARTIFACT_DIR}/commit.txt || true"
+
+            archiveArtifacts artifacts: "${ARTIFACT_DIR}/**", fingerprint: true
+
+            echo "Publishing unit test results..."
+            junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
+        }
+
         success {
-            echo "PIPELINE SUCCESS: Build, Test, Deploy completed."
+            echo "PIPELINE SUCCESS"
             sh "echo SUCCESS > ${ARTIFACT_DIR}/status.txt"
         }
 
         failure {
-            echo "PIPELINE FAILURE: One or more stages failed."
-            sh "mkdir -p ${ARTIFACT_DIR} && echo FAILURE > ${ARTIFACT_DIR}/status.txt"
-        }
-
-        always {
-            echo "Archiving pipeline results..."
-            archiveArtifacts artifacts: "${ARTIFACT_DIR}/**", fingerprint: true
-
-            echo "Publishing test results if available..."
-            junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
+            echo "PIPELINE FAILURE"
+            sh "echo FAILURE > ${ARTIFACT_DIR}/status.txt"
         }
     }
 }
